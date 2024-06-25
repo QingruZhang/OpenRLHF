@@ -14,13 +14,14 @@ read -r -d '' training_commands <<EOF
     --logging_steps 1 \
     --eval_steps -1 \
     --zero_stage 2 \
+    --flash_attn \
     --max_epochs 1 \
     --bf16 \
-    --flash_attn \
     --learning_rate 5e-6 \
     --gradient_checkpointing
 EOF
     # --wandb [WANDB_TOKENS]
+    # --flash_attn 
 
 if [[ ${1} != "slurm" ]]; then
     deepspeed $training_commands
