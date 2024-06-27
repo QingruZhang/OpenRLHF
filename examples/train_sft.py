@@ -2,6 +2,7 @@ import argparse
 import math
 import os
 from datetime import datetime
+from pathlib import Path
 
 from transformers.trainer import get_scheduler
 
@@ -15,6 +16,24 @@ def train(args):
     # configure strategy
     strategy = get_strategy(args)
     strategy.setup_distributed()
+    root_output_dir = Path(args.root_output_dir)
+    output_dir = "sft_lr-{lr}_bs-{bs}_len-{max_len}_sample-{max_sample}_epoch-{epoch}_seed{seed}".format(
+        lr=args.learning_rate, 
+        bs=args.train_batch_size, 
+        epoch=args.max_epochs, 
+        max_len=args.max_len,
+        max_sample=args.max_samples,
+        seed=args.seed,
+    )
+    output_dir = root_output_dir / output_dir
+    output_dir.mkdir(exist_ok=True, parents=True) 
+    args.output_dir = str(output_dir.resolve())
+    args.save_path = str((output_dir/"save_checkpoint").resolve())
+    args.ckpt_path = str((output_dir/"training_checkpoints").resolve())
+
+    if args.debug:
+        import ipdb 
+        ipdb.set_trace()
 
     # configure model
     # load huggingface model
@@ -127,6 +146,7 @@ if __name__ == "__main__":
     parser.add_argument("--ckpt_path", type=str, default="./ckpt/checkpoints_sft")
     parser.add_argument("--max_ckpt_num", type=int, default=3)
     parser.add_argument("--max_ckpt_mem", type=int, default=1000)  # 1000GB
+    parser.add_argument("--learning_rate", type=float, default=2e-6)
     parser.add_argument("--max_epochs", type=int, default=2)
     parser.add_argument("--micro_train_batch_size", type=int, default=8)
     parser.add_argument("--train_batch_size", type=int, default=128)
@@ -143,7 +163,6 @@ if __name__ == "__main__":
     parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for deepspeed")
     parser.add_argument("--zero_stage", type=int, default=2)
     parser.add_argument("--bf16", action="store_true", default=False)
-    parser.add_argument("--learning_rate", type=float, default=2e-6)
     parser.add_argument("--zpg", type=int, default=1, help="ZeRO++ max partition size")
     parser.add_argument("--adam_offload", action="store_true", default=False)
     parser.add_argument("--flash_attn", action="store_true", default=False)
@@ -175,6 +194,11 @@ if __name__ == "__main__":
         type=str,
         default="sft_%s" % datetime.now().strftime("%m%dT%H:%M"),
     )
+
+    parser.add_argument("--root_output_dir", type=str, default="./outputs/")
+    parser.add_argument("--output_dir", type=str, default="./outputs/")
+    parser.add_argument("--use_tb_writter", action="store_true", default=False)
+    parser.add_argument("--debug", action="store_true", default=False)
 
     args = parser.parse_args()
     train(args)

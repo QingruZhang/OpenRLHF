@@ -1,4 +1,5 @@
 import math
+import os
 from abc import ABC
 
 import torch
@@ -10,6 +11,8 @@ from transformers.trainer import get_scheduler
 
 from openrlhf.datasets import SFTDataset
 from openrlhf.models import GPTLMLoss, SwitchBalancingLoss
+
+from torch.utils.tensorboard import SummaryWriter
 
 
 class SFTTrainer(ABC):
@@ -81,6 +84,13 @@ class SFTTrainer(ABC):
             wandb.define_metric("train/*", step_metric="train/global_step", step_sync=True)
             wandb.define_metric("eval/global_step")
             wandb.define_metric("eval/*", step_metric="eval/global_step", step_sync=True)
+        
+        # tensorboard setting
+        self.tb_writter = None
+        if self.strategy.args.use_tb_writter and self.strategy.is_rank_0():
+            self.tb_writter = SummaryWriter(
+                log_dir=os.path.join(self.strategy.args.output_dir, "tensorboard")
+            )
 
     def fit(self, args):
         # get eval and save steps
@@ -108,7 +118,7 @@ class SFTTrainer(ABC):
             # train
             self.model.train()
             loss_mean = 0
-            for prompts_id_len, inputs, attention_masks, _ in self.train_dataloader:
+            for prompts_id_len, inputs, attention_masks, info in self.train_dataloader:
                 inputs = inputs.squeeze(1).to(torch.cuda.current_device())
                 attention_mask = attention_masks.squeeze(1).to(torch.cuda.current_device())
                 output = self.model(inputs, attention_mask=attention_mask, return_output=True)
@@ -162,6 +172,14 @@ class SFTTrainer(ABC):
             ):
                 logs = {"train/%s" % k: v for k, v in {**logs_dict, "global_step": global_step}.items()}
                 self._wandb.log(logs)
+            
+            # tensorboard
+            if (
+                self.tb_writter is not None and self.strategy.is_rank_0() 
+                and global_step % self.strategy.accumulated_gradient == 0
+            ):
+                for key,value in logs_dict.items():
+                    self.tb_writter.add_scalar(f"train/{key}", value, global_step)
 
         # eval
         if global_step % args.eval_steps == 0:
@@ -208,4 +226,7 @@ class SFTTrainer(ABC):
             if self._wandb is not None and self.strategy.is_rank_0():
                 logs = {"eval/%s" % k: v for k, v in {**logs, "global_step": steps}.items()}
                 self._wandb.log(logs)
+            if self.tb_writter is not None and self.strategy.is_rank_0():
+                for key,value in logs.items():
+                    self.tb_writter.add_scalar(f"eval/{key}", value, steps)
         self.model.train()  # reset model state

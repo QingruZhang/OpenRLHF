@@ -108,9 +108,11 @@ def blending_datasets(
             elif "validation" in data:
                 eval_data = data["validation"].select(range(min(max_count01, len(data["validation"]))))
             elif "train" in data:
-                eval_data = data["train"].select(range(min(max_count01, int(len(data["train"]) * 0.01))))
+                num_eval_examples = min(max_count01, int(len(data["train"])*0.01))
+                eval_data = data["train"].select(list(range(len(data["train"])-num_eval_examples, len(data["train"]))))
             else:
-                eval_data = data.select(range(min(int(max_count01), int(len(data) * 0.01))))
+                num_eval_examples = min(max_count01, int(len(data["train"])*0.01))
+                eval_data = data.select(range(len(data["train"])-num_eval_examples, len(data["train"])))
             eval_data_list.append(eval_data)
 
     # merge datasets

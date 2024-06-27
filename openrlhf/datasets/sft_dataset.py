@@ -29,6 +29,13 @@ def preprocess_data(data, input_template=None, input_key=None, output_key=None, 
             )
             response = data["conversations"][-1]["value"]
             input_template = None  # do not modified with input template again
+        # allenai/tulu-v2-sft-mixture
+        elif exist_and_not_none(data, "messages") and isinstance(data["messages"], list):
+            prompt = process_multi_turn_dialogue(
+                data["messages"][:-1], input_template=input_template, content_key="content", role_key="role"
+            )
+            response = data["messages"][-1]["content"]
+            input_template = None
         # for batch_inference.py
         elif exist_and_not_none(data, "input") and exist_and_not_none(data, "output"):
             prompt = data["input"]
